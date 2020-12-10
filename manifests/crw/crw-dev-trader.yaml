@@ -34,52 +34,10 @@ items:
         containers:
         - name: trader
           image: 'ibmstocktrader/trader:latest'
-          env:
-            - name: WLP_LOGGING_CONSOLE_FORMAT
-              value: json
-            - name: WLP_LOGGING_CONSOLE_SOURCE
-              value: message,ffdc
-            - name: JWT_AUDIENCE
-              value: trader
-            - name: JWT_ISSUER
-              valueFrom:
-                secretKeyRef:
-                  name: keycloak-oidc
-                  key: OIDC_ISSUER
-                  optional: true
-            - name: OIDC_CLIENTID
-              valueFrom:
-                secretKeyRef:
-                  name: keycloak-oidc
-                  key: OIDC_CLIENTID
-                  optional: true
-            - name: OIDC_CLIENTSECRET
-              valueFrom:
-                secretKeyRef:
-                  name: keycloak-oidc
-                  key: OIDC_CLIENTSECRET
-                  optional: true
-            - name: OIDC_DISCOVERY_URL
-              valueFrom:
-                secretKeyRef:
-                  name: keycloak-oidc
-                  key: OIDC_DISCOVERY_URL
-                  optional: true
-            - name: PORTFOLIO_URL
-              value: http://portfolio-service:9080/portfolio
-            - name: AUTH_TYPE
-              value: keycloak
           ports:
             - containerPort: 9080
             - containerPort: 9443
           imagePullPolicy: Always
-          resources:
-            limits:
-              cpu: 500m
-              memory: 500Mi
-            requests:
-              cpu: 100m
-              memory: 128Mi
 ---
   #Deploy the service
   apiVersion: v1
@@ -101,23 +59,3 @@ items:
         targetPort: 9443
     selector:
       app: trader
----
-  # Openshift Route
-  kind: Route
-  apiVersion: route.openshift.io/v1
-  metadata:
-    name: trader
-    labels:
-      app: trader
-      solution: stock-trader
-  spec:
-    to:
-      kind: Service
-      name: trader-service
-      weight: 100
-    port:
-      targetPort: https
-    tls:
-      termination: passthrough
-      insecureEdgeTerminationPolicy: None
-    wildcardPolicy: None
