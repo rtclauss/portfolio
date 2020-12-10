@@ -1,0 +1,186 @@
+apiVersion: 1.0.0
+metadata:
+  generateName: crw-stocktrader-portfolio-maven-openliberty-
+attributes:
+  mergePlugins: 'true'
+projects:
+  ### More source code projects can be aded here
+  # - name: portfolio
+  #   source:
+  #     location: 'https://github.com/IBMStockTrader/portfolio.git'
+  #     type: git
+  #     branch: master
+  - name: portfolio
+    source:
+      location: 'https://github.com/rtclauss/portfolio.git'
+      type: git
+      branch: crw-devfile
+
+#################################################################################
+# Here's where you can search for "built-in" plugins to add to the workspace:   #
+# https://che-plugin-registry.openshift.io/v3/plugins/                          #
+#################################################################################
+components:
+  ### Default Theia Editor
+  - id: eclipse/che-theia/next
+    type: cheEditor
+    alias: theia-editor
+  ### IntelliJ Community Edition IDE
+  # - id: che-incubator/intellij-community/latest
+  #   type: cheEditor
+  #   alias: intellij
+
+  - id: redhat/dependency-analytics/latest
+    type: chePlugin
+
+  ### K8s tooling.  Not sure if Needed?
+  - id: ms-kubernetes-tools/vscode-kubernetes-tools/latest
+    type: chePlugin
+
+  ### GitLens for improved git access
+  - id: eamodio/vscode-gitlens/latest
+    registryUrl: https://che-plugin-registry.openshift.io/v3/
+    type: chePlugin
+
+  ### Work with Git PRs for improved git access
+  - id: ms-vscode/vscode-github-pullrequest/latest
+    registryUrl: https://che-plugin-registry.openshift.io/v3/
+    type: chePlugin
+
+  ### Liberty Development Stack.
+  ### This provides the innerloop runtime environment.
+  ### This could also be a custom docker.
+  # - type: dockerimage
+  #   alias: devruntime
+  #   image: 'openliberty/application-stack:0.4'
+  #   mountSources: true
+  #   endpoints:
+  #     - attributes:
+  #         protocol: http
+  #         public: 'false'
+  #         discoverable: 'true'
+  #       name: web
+  #       port: 9080
+  #   command:
+  #     - sleep
+  #     - infinity
+  #   memoryLimit: 1512Mi
+
+  ### Liberty Development Stack.
+  ### This provides the innerloop runtime environment.
+  ### This could also be a custom docker.
+  - type: dockerimage
+    alias: innerloop
+    image: 'maven:3.6-jdk-11'
+    mountSources: true
+    volumes:
+      - name: mavenrepo
+        containerPath: /root/.m2
+    endpoints:
+      - attributes:
+          protocol: http
+          public: 'false'
+          discoverable: 'true'
+        name: web
+        port: 9080
+    command:
+      - sleep
+      - infinity
+    memoryLimit: 1512Mi
+
+  ### OCP tooling to integrate with IDE.  Not sure if Needed?
+  - id: redhat/vscode-openshift-connector/latest
+    type: chePlugin
+
+  ### Java 11 Runtime
+  - id: redhat/java11/latest
+    preferences:
+      java.server.launchMode: Standard
+    type: chePlugin
+
+  ### XML Support for Theia
+  - id: redhat/vscode-xml/latest
+    type: chePlugin
+
+  ### YAML Support for Theia
+  - id: redhat/vscode-yaml/latest
+    type: chePlugin
+
+  ### NodeJS Support for Theia
+  # - id: ms-vscode/node-debug2/latest
+  #   type: chePlugin
+
+  ### trader microservice
+  - alias: trader
+    type: openshift
+    reference: manifests/crw/crw-dev-trader.yaml
+    selector:
+      app.kubernetes.io/name: trader
+      app.kubernetes.io/component: ui
+      app.kubernetes.io/part-of: stock-trader
+
+#################################################################################
+# Commands are available from the "command registry" in Theia.                  #
+# They are shortcuts to run certain CLI commands in the docker container.       #
+# For example, build and package the code and start the server in debug mode.   #
+# Or, attach to the runing JVM                                                  #
+#################################################################################
+commands:
+  - name: Package Portfolio For OL
+    actions:
+      - workdir: /projects
+        type: exec
+        command: |
+          if [ -e /projects/.disable-bld-cmd ];
+                   then
+                      echo "found the disable file" && echo "devBuild command will not run" && exit 0;
+                   else
+                      echo "will run the devBuild command" && mkdir -p /projects/target/liberty && \
+                        if [ ! -d /projects/target/liberty/wlp ];
+                          then echo "...moving liberty"; mv /opt/ol/wlp /projects/target/liberty; touch ./.liberty-mv;
+                        elif [[ -d /projects/target/liberty/wlp && ! -e /projects/.liberty-mv ]];
+                          then echo "STACK WARNING - LIBERTY RUNTIME WAS LOADED FROM HOST";
+                        fi \
+                      && mvn -Dliberty.runtime.version=20.0.0.12 package && touch ./.disable-bld-cmd;
+           fi
+        component: innerloop
+  - name: Run Portfolio in OL Dev Mode
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}/portfolio'
+        type: exec
+        command: 'mvn -Dliberty.runtime.version=20.0.0.12 -Ddebug=false -DhotTests=true -DcompileWait=3 liberty:dev'
+        component: innerloop
+  - name: Run Portfolio in OL Dev Mode (No Tests)
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}/portfolio'
+        type: exec
+        command: 'mvn -Dliberty.runtime.version=20.0.0.12 -DskipTests=true -Ddebug=false liberty:dev'
+        component: innerloop
+  - name: Run Portfolio in OL Debug Mode
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}/portfolio'
+        type: exec
+        command: 'mvn -Dliberty.runtime.version=20.0.0.12 liberty:dev -Dliberty.env.WLP_DEBUG_REMOTE=y'
+        component: innerloop
+  - name: test
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}/vertx-health-checks-example-redhat'
+        type: exec
+        command: 'mvn -Dmicroshed_hostname=localhost -Dmicroshed_http_port=9080 -Dmicroshed_manual_env=true -Dmicroshed_app_context_root=/ failsafe:integration-test'
+        component: innerloop
+  - name: attach
+    actions:
+      - referenceContent: |
+          {
+            "version": "0.2.0",
+            "configurations": [
+              {
+                "type": "java",
+                "request": "attach",
+                "name": "Debug (Attach)",
+                "hostName": "localhost",
+                "port": 7777
+              }
+            ]
+          }
+        type: vscode-launch
