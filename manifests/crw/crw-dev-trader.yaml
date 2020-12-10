@@ -26,9 +26,6 @@ items:
     labels:
       app: stock-trader
   spec:
-    selector:
-      matchLabels:
-        name: trader
     template:
       metadata:
         labels:
