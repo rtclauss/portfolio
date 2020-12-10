@@ -114,10 +114,6 @@ components:
   - alias: trader
     type: openshift
     reference: manifests/crw/crw-dev-trader.yaml
-    selector:
-      app.kubernetes.io/name: trader
-      app.kubernetes.io/component: ui
-      app.kubernetes.io/part-of: stock-trader
 
 #################################################################################
 # Commands are available from the "command registry" in Theia.                  #
